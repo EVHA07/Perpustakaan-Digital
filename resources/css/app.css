@@ -9,21 +9,33 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 
-    --color-bg: #0a0a0f;
-    --color-bg-gradient-start: #1a1a2e;
-    --color-bg-gradient-end: #0a0a0f;
-    --color-surface: rgba(255, 255, 255, 0.05);
-    --color-surface-hover: rgba(255, 255, 255, 0.1);
-    --color-surface-secondary: rgba(255, 255, 255, 0.03);
-    --color-border: rgba(255, 255, 255, 0.1);
-    --color-border-light: rgba(255, 255, 255, 0.05);
-    --color-text: #e5e7eb;
-    --color-text-muted: #9ca3af;
-    --color-text-light: #6b7280;
+    --color-bg: #f9fafb;
+    --color-bg-gradient-start: #f3f4f6;
+    --color-bg-gradient-end: #f9fafb;
+    --color-surface: #ffffff;
+    --color-surface-hover: #f3f4f6;
+    --color-surface-secondary: #f3f4f6;
+    --color-border: #e5e7eb;
+    --color-border-light: #f3f4f6;
+    --color-text: #111827;
+    --color-text-muted: #6b7280;
+    --color-text-light: #9ca3af;
     --color-accent: #3b82f6;
     --color-accent-hover: #2563eb;
     --color-success: #22c55e;
     --color-danger: #ef4444;
+
+    --color-dark-bg: #0a0a0f;
+    --color-dark-bg-gradient-start: #1a1a2e;
+    --color-dark-bg-gradient-end: #0a0a0f;
+    --color-dark-surface: rgba(255, 255, 255, 0.05);
+    --color-dark-surface-hover: rgba(255, 255, 255, 0.1);
+    --color-dark-surface-secondary: rgba(255, 255, 255, 0.03);
+    --color-dark-border: rgba(255, 255, 255, 0.1);
+    --color-dark-border-light: rgba(255, 255, 255, 0.05);
+    --color-dark-text: #e5e7eb;
+    --color-dark-text-muted: #9ca3af;
+    --color-dark-text-light: #6b7280;
 }
 
 .glass {
@@ -56,12 +68,12 @@
 }
 
 body {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0a0a0f 100%);
+    background: linear-gradient(135deg, #f3f4f6 0%, #ffffff 50%, #f9fafb 100%);
     background-attachment: fixed;
 }
 
 html.dark body {
-    background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0a0a0f 100%);
     background-attachment: fixed;
 }
 
