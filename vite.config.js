@@ -8,9 +8,6 @@ export default defineConfig({
             refresh: true,
         }),
     ],
-    css: {
-        postcss: './postcss.config.js',
-    },
     server: {
         watch: {
             ignored: ['**/storage/framework/views/**'],

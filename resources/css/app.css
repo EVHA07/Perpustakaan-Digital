@@ -47,16 +47,6 @@ html.dark .glass-input:focus {
     background: rgba(255, 255, 255, 0.06);
 }
 
-body {
-    background: linear-gradient(135deg, #f3f4f6 0%, #ffffff 50%, #f9fafb 100%);
-    background-attachment: fixed;
-}
-
-html.dark body {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0a0a0f 100%);
-    background-attachment: fixed;
-}
-
 .glass-glow {
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(16px);
