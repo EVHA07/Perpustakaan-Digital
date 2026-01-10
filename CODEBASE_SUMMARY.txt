@@ -1,0 +1,244 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║          PERPUSTAKAAN DIGITAL - CODEBASE EXPLORATION COMPLETE             ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+
+📊 PROJECT OVERVIEW
+═══════════════════════════════════════════════════════════════════════════════
+
+Framework:      Laravel 12 (PHP)
+Frontend:       Blade Templates + Vanilla JavaScript
+Database:       SQLite / Configurable
+Styling:        Tailwind CSS 4.0
+PDF Reading:    PDF.js 3.11.174
+Build Tool:     Vite 7.0
+
+
+🏗️  ARCHITECTURE OVERVIEW
+═══════════════════════════════════════════════════════════════════════════════
+
+App Structure:
+  app/
+  ├── Http/Controllers/
+  │   ├── Frontend/           ← Student features (HomeController, BookController)
+  │   ├── Admin/              ← Admin features (DashboardController, BookController)
+  │   └── Auth/               ← LoginController
+  ├── Models/
+  │   ├── User.php            ← User with reading stats
+  │   ├── Book.php            ← Book metadata
+  │   └── History.php         ← Reading session tracker ⭐ CORE
+  └── Middleware/             ← IsStudent, IsAdmin, Authenticate
+
+Resources:
+  resources/
+  ├── views/
+  │   ├── layouts/            ← app.blade.php (main layout)
+  │   ├── frontend/           ← home.blade.php, reader.blade.php ⭐ TIMER HERE
+  │   ├── auth/               ← login.blade.php
+  │   └── admin/              ← dashboard.blade.php
+  ├── js/                     ← app.js, bootstrap.js
+  └── css/                    ← app.css (Tailwind config)
+
+Database:
+  Users Table                 (id, name, email, password, role, is_active)
+  Books Table                 (id, judul, kategori, cover_image, file_path, total_pages)
+  Histories Table ⭐ CORE    (id, user_id, book_id, last_page, total_time_spent, last_ping_at)
+
+
+📖 READING WORKFLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+1. LOGIN
+   └─ GET /login → LoginController
+
+2. HOME PAGE (SHOWS STATS)
+   └─ GET /home → HomeController@index
+      ├─ Shows: Total Reading Time, Books Read
+      ├─ Calculates: SUM(histories.total_time_spent)
+      └─ Displays: Last 4 books to continue reading
+
+3. VIEW BOOK DETAILS
+   └─ GET /buku/{id} → BookController@show
+      └─ Displays: Cover, Title, Synopsis, "Start Reading" button
+
+4. START READING
+   └─ POST /buku/{id}/start → BookController@startReading
+      ├─ Creates History record (if doesn't exist)
+      └─ Redirects to reader
+
+5. READER PAGE (⭐ TIMER ACTIVE)
+   └─ GET /buku/{id}/read → BookController@read
+      ├─ Renders: PDF.js viewer
+      ├─ Shows: Timer (HH:MM:SS) in header
+      ├─ Features: 
+      │  ├─ Page navigation (arrows, buttons)
+      │  ├─ Keyboard shortcuts (arrow keys, escape)
+      │  ├─ Page auto-save on scroll
+      │  └─ Dark mode toggle
+      │
+      └─ JavaScript:
+         ├─ updateTimer() every 1s (display only)
+         └─ sendPing() every 15s (server persistence)
+
+6. TIME ACCUMULATION (Every 15 seconds)
+   └─ POST /buku/{id}/ping → BookController@ping ⭐ TIMER LOGIC
+      ├─ Calculates: delta = now - last_ping_at
+      ├─ Accumulates: total_time_spent += min(delta, 600)
+      ├─ Updates: last_ping_at = now (anchor for next delta)
+      └─ Returns: {total_time_spent, delta}
+
+7. EXIT READER
+   └─ Calls:
+      ├─ saveProgress() → Updates last_page
+      ├─ sendPing() → Final time accumulation
+      └─ Redirect to book detail page
+
+8. HISTORY PAGE
+   └─ GET /history → HistoryController@index
+      └─ Shows: All books read + total time
+
+
+⏱️  HOW THE TIMER WORKS
+═══════════════════════════════════════════════════════════════════════════════
+
+Core Components:
+
+  Backend (Source of Truth):
+  ├─ History.total_time_spent        (cumulative seconds in database)
+  ├─ History.last_ping_at            (anchor point for delta)
+  └─ POST /ping endpoint             (accumulates time every 15s)
+
+  Frontend (Display Only):
+  ├─ serverTotalSeconds              (from database via data attribute)
+  ├─ lastPingTimestamp               (from database via data attribute)
+  ├─ Display = serverTotal + (now - lastPing)
+  └─ updateTimer() every 1s          (smooth visual update)
+
+
+Timer Flow Example:
+
+  T=0s:   Page load
+          ├─ History created: total_time_spent=0, last_ping_at=0s
+          ├─ Frontend: serverTotalSeconds=0, lastPingTimestamp=0s
+          └─ Display: 00:00:00
+
+  T=10s:  First ping (sent every 15s)
+          ├─ Backend: delta = 10 - 0 = 10s
+          ├─ Database: total_time_spent = 0 + 10 = 10s, last_ping_at=10s
+          ├─ Frontend: serverTotalSeconds=10, lastPingTimestamp=10s
+          └─ Display: 00:00:10
+
+  T=15s:  User refreshes (F5)
+          ├─ Backend: Retrieves History (still 10s, 10s)
+          ├─ Frontend: Initialize from data attributes
+          └─ Display: 00:00:10 ✓ (NOT RESET!)
+
+  T=20s:  Second ping
+          ├─ Backend: delta = 20 - 10 = 10s
+          ├─ Database: total_time_spent = 10 + 10 = 20s, last_ping_at=20s
+          └─ Display: 00:00:20 ✓
+
+
+Key Principles:
+
+  1. total_time_spent is CUMULATIVE (always +=, never =)
+  2. last_ping_at is the ANCHOR for next delta calculation
+  3. Frontend display = server data + elapsed since last ping
+  4. Only persistence via ping endpoint (every 15s)
+  5. Max 600s per ping prevents cheating
+
+
+🗄️  DATABASE SCHEMA
+═══════════════════════════════════════════════════════════════════════════════
+
+USERS TABLE:
+  id (PK)
+  name
+  email (UNIQUE)
+  password (hashed)
+  role (ENUM: admin, student)
+  is_active (BOOLEAN)
+  created_at, updated_at
+
+BOOKS TABLE:
+  id (PK)
+  judul
+  kategori
+  sinopsis
+  cover_image (path)
+  file_path (path to PDF)
+  total_pages
+  is_active (BOOLEAN)
+  created_at, updated_at
+
+HISTORIES TABLE (⭐ CORE):
+  id (PK)
+  user_id (FK)
+  book_id (FK)
+  last_page (INT)
+  total_time_spent (INT SECONDS)    ← CUMULATIVE
+  last_read_at (TIMESTAMP)
+  last_ping_at (TIMESTAMP)          ← ANCHOR FOR DELTA
+  created_at, updated_at
+  
+  Unique Constraint: (user_id, book_id)
+
+
+🛣️  MAIN ROUTES
+═══════════════════════════════════════════════════════════════════════════════
+
+Frontend Routes (auth + is.student):
+  GET  /home                         → HomeController@index
+  GET  /buku/{id}                   → BookController@show
+  GET  /buku/{id}/read              → BookController@read (reader page)
+  POST /buku/{id}/start             → BookController@startReading
+  POST /buku/{id}/progress          → BookController@updateReadingProgress
+  POST /buku/{id}/ping              → BookController@ping ⭐ TIMER
+  GET  /history                     → HistoryController@index
+  GET  /search                      → SearchController@index
+
+Admin Routes (auth + is.admin):
+  GET  /admin/dashboard             → DashboardController@index
+  GET  /admin/books                 → BookController@index
+  GET  /admin/users                 → UserController@index
+  [CRUD operations for books and users]
+
+Auth Routes:
+  GET  /login                       → LoginController@showLoginForm
+  POST /login                       → LoginController@login
+  POST /logout                      → LoginController@logout
+  POST /theme/toggle                → LoginController@toggleTheme
+
+
+⭐ KEY FILES FOR TIMER FUNCTIONALITY
+═══════════════════════════════════════════════════════════════════════════════
+
+Backend Files:
+
+  app/Http/Controllers/Frontend/BookController.php
+    ├─ ping($id)                     ← MAIN TIMER LOGIC
+    │  └─ POST /buku/{id}/ping
+    │  └─ Accumulates time every 15 seconds
+    ├─ read($id)                     ← Initialize reader
+    │  └─ Creates History record
+    ├─ updateReadingProgress($id)    ← Save page number
+    └─ startReading($id)             ← Start reading
+
+  app/Http/Controllers/Frontend/HomeController.php
+    └─ index()
+       └─ Calculates and displays total reading stats
+
+  app/Http/Controllers/Frontend/HistoryController.php
+    └─ index()
+       └─ Shows reading history with stats
+
+  app/Models/History.php
+    └─ Stores reading session data (total_time_spent, last_ping_at)
+
+  routes/web.php
+    └─ Route definitions including POST /buku/{id}/ping
+
+Frontend Files:
+
+  resources/views/frontend/reader.blade.php ⭐ MAIN
+    ├─ Lines 42-46: Pa

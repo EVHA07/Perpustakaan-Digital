@@ -1,0 +1,156 @@
+═══════════════════════════════════════════════════════════════════════════════
+🔧 TIMER RESET BUG - FIXED ✅
+═══════════════════════════════════════════════════════════════════════════════
+
+MASALAH AWAL:
+- Timer di halaman reader selalu RESET setiap ±12 detik
+- Total waktu membaca tidak muncul di halaman Home
+
+ROOT CAUSE (4 BUG):
+
+1. ❌ Frontend: lastPingTime selalu di-reset ke Date.now()
+   → Saat page refresh, elapsed time menjadi 0, timer tampak RESET
+
+2. ❌ Backend: Delta < 60 detik = abaikan
+   → Time loss saat network lag atau idle tab
+
+3. ❌ Backend: Mengupdate last_ping_at saat page load
+   → Setiap page buka, timestamp RESET ke sekarang
+   → Ping pertama hanya hitung detik-detik load time saja
+
+4. ❌ Backend: updateOrCreate bisa overwrite total_time_spent ke 0
+   → Semua waktu membaca sebelumnya HILANG jika method dijalankan 2x
+
+═══════════════════════════════════════════════════════════════════════════════
+
+SOLUSI YANG DITERAPKAN:
+
+✅ 1. Frontend: Gunakan last_ping_at dari SERVER, bukan Date.now()
+   File: resources/views/frontend/reader.blade.php
+
+   BEFORE:
+   let lastPingTime = Date.now()
+
+   AFTER:
+   let lastPingTimestamp = parseInt(document.body.dataset.lastPingAt) || ...
+
+✅ 2. Frontend: Hitung elapsed dari server timestamp
+   File: resources/views/frontend/reader.blade.php
+
+   BEFORE:
+   const elapsed = Math.floor((Date.now() - lastPingTime) / 1000)
+
+   AFTER:
+   const elapsedSinceLastPing = nowTimestamp - lastPingTimestamp
+
+✅ 3. Backend: Hitung SEMUA delta, max 600 detik (10 menit)
+   File: app/Http/Controllers/Frontend/BookController.php
+
+   BEFORE:
+   if ($delta > 0 && $delta < 60) {
+       $history->total_time_spent += $delta;
+   }
+
+   AFTER:
+   if ($delta > 0) {
+       $timeToAdd = min($delta, 600);
+       $history->total_time_spent += $timeToAdd;
+   }
+
+✅ 4. Backend: Jangan update last_ping_at saat page load
+   File: app/Http/Controllers/Frontend/BookController.php
+   Baris 51-52 → DIHAPUS!
+
+✅ 5. Backend: Gunakan firstOrCreate, bukan updateOrCreate
+   File: app/Http/Controllers/Frontend/BookController.php
+
+   BEFORE:
+   History::updateOrCreate([...], [
+       'total_time_spent' => 0,  // OVERWRITE!
+   ]);
+
+   AFTER:
+   History::firstOrCreate([...], [
+       'total_time_spent' => 0,  // Only if new
+   ]);
+
+✅ 6. Blade: Tambah data-last-ping-at ke body tag
+   File: resources/views/frontend/reader.blade.php
+
+   BEFORE:
+   <body data-total-seconds="...">
+
+   AFTER:
+   <body 
+       data-total-seconds="..."
+       data-last-ping-at="..."
+   >
+
+═══════════════════════════════════════════════════════════════════════════════
+
+TIMELINE ALUR YANG BENAR:
+
+Detik 0 → Buka reader
+├─ Frontend: lastPingTimestamp = 0 (dari DB)
+├─ Frontend: serverTotalSeconds = 600
+└─ Display: 600 + (0-0) = 600 ✓
+
+Detik 5 → Refresh page
+├─ Backend: last_ping_at = 0 (TIDAK DIRESET!)
+├─ Frontend: lastPingTimestamp = 0 (dari DB)
+├─ Frontend: serverTotalSeconds = 600
+└─ Display: 600 + (5-0) = 605 ✓
+
+Detik 15 → Ping pertama
+├─ Server: delta = 15 detik (15-0)
+├─ Server: total_time = 600 + 15 = 615
+├─ Frontend: serverTotalSeconds = 615
+├─ Frontend: lastPingTimestamp = 15
+└─ Display: 615 + (15-15) = 615 ✓
+
+═══════════════════════════════════════════════════════════════════════════════
+
+HASIL AKHIR:
+
+✅ Timer TIDAK reset saat page refresh
+✅ Timer TIDAK reset saat network lag
+✅ Timer terus AKUMULASI dari waktu terakhir baca
+✅ Home page menampilkan total waktu dengan BENAR
+✅ Anti-cheating tetap berlaku (max 10 menit per ping)
+✅ Data persisten di database, tidak ada yang hilang
+
+═══════════════════════════════════════════════════════════════════════════════
+
+TESTING:
+
+Test #1: Reload page dalam 5 detik
+1. Buka reader, tunggu 5 detik
+2. Refresh page (F5)
+3. Timer seharusnya continue dari ~5 detik, BUKAN reset ke 0 ✓
+
+Test #2: Close & reopen tab
+1. Buka reader, tunggu 10 detik
+2. Close tab, reopen /buku/{id}/read
+3. Timer seharusnya show ~10+ detik, BUKAN reset ✓
+
+Test #3: Network lag
+1. Buka DevTools → Network → Throttle ke "Slow 3G"
+2. Baca 1 menit, tunggu jeda 30 detik
+3. Tutup throttle
+4. Timer seharusnya terus akumulasi, tidak ada yang hilang ✓
+
+Test #4: Home page menampilkan total waktu
+1. Baca 2 buku: 5 menit & 3 menit
+2. Go to Home
+3. "Total Waktu Membaca" = 8 menit ✓
+
+═══════════════════════════════════════════════════════════════════════════════
+
+FILES MODIFIED:
+- app/Http/Controllers/Frontend/BookController.php
+- resources/views/frontend/reader.blade.php
+
+DOCUMENTATION:
+- FIX_TIMER_RESET_BUG.md (penjelasan detail)
+
+═══════════════════════════════════════════════════════════════════════════════

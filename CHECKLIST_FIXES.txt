@@ -1,0 +1,257 @@
+═══════════════════════════════════════════════════════════════════════════════
+✅ TIMER RESET BUG - FIX CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+FILE: app/Http/Controllers/Frontend/BookController.php
+═════════════════════════════════════════════════════════════════════════════════
+
+✅ FIX #1: read() method - JANGAN UPDATE last_ping_at
+─────────────────────────────────────────────────────────────────────────────
+Line 27-54
+
+SEBELUM:
+    public function read($id)
+    {
+        ...
+        $history = History::firstOrCreate(
+            ['user_id' => Auth::id(), 'book_id' => $id],
+            [...]
+        );
+        
+        // Update last_ping_at when opening the book
+        $history->last_ping_at = now();              ← BUG!
+        $history->save();                             ← BUG!
+        
+        return view('frontend.reader', compact('book', 'history'));
+    }
+
+SESUDAH:
+    public function read($id)
+    {
+        ...
+        $history = History::firstOrCreate(
+            ['user_id' => Auth::id(), 'book_id' => $id],
+            [...]
+        );
+        
+        // JANGAN update last_ping_at di sini!        ← FIXED!
+        // Biarkan tetap old value                    ← FIXED!
+        // Sehingga delta dihitung dari waktu terakhir baca
+        
+        return view('frontend.reader', compact('book', 'history'));
+    }
+
+✅ Status: DONE
+
+─────────────────────────────────────────────────────────────────────────────
+✅ FIX #2: startReading() method - gunakan firstOrCreate
+─────────────────────────────────────────────────────────────────────────────
+Line 56-77
+
+SEBELUM:
+    public function startReading($id)
+    {
+        ...
+        $history = History::updateOrCreate(      ← BUG!
+            ['user_id' => Auth::id(), 'book_id' => $id],
+            [
+                'last_page' => 0,
+                'total_time_spent' => 0,         ← OVERWRITE!
+                'last_read_at' => now(),
+                'last_ping_at' => now(),
+            ]
+        );
+        ...
+    }
+
+SESUDAH:
+    public function startReading($id)
+    {
+        ...
+        History::firstOrCreate(                  ← FIXED!
+            ['user_id' => Auth::id(), 'book_id' => $id],
+            [
+                'last_page' => 1,
+                'total_time_spent' => 0,        ← Only if new
+                'last_read_at' => now(),
+                'last_ping_at' => now(),
+            ]
+        );
+        ...
+    }
+
+✅ Status: DONE
+
+─────────────────────────────────────────────────────────────────────────────
+✅ FIX #3: ping() method - hitung SEMUA delta
+─────────────────────────────────────────────────────────────────────────────
+Line 98-155
+
+SEBELUM:
+    public function ping(Request $request, $id)
+    {
+        $now = now();
+        $delta = 0;
+        
+        if ($history->last_ping_at) {
+            $delta = $now->diffInSeconds($history->last_ping_at);
+            
+            // Anti-cheating & anti idle tabs: only count if delta < 60
+            if ($delta > 0 && $delta < 60) {     ← BUG! Discard >= 60
+                $history->total_time_spent += $delta;
+            }
+        }
+        ...
+    }
+
+SESUDAH:
+    public function ping(Request $request, $id)
+    {
+        ...
+        if ($history->last_ping_at) {
+            $delta = $now->diffInSeconds($history->last_ping_at);
+            
+            // HITUNG SEMUA DELTA                  ← FIXED!
+            // Max 600 detik (10 menit) per ping  ← FIXED!
+            if ($delta > 0) {
+                $timeToAdd = min($delta, 600);   ← FIXED!
+                $history->total_time_spent += $timeToAdd;
+            }
+        }
+        ...
+    }
+
+✅ Status: DONE
+
+─────────────────────────────────────────────────────────────────────────────
+
+FILE: resources/views/frontend/reader.blade.php
+═════════════════════════════════════════════════════════════════════════════════
+
+✅ FIX #4: Body tag - tambah data-last-ping-at
+─────────────────────────────────────────────────────────────────────────────
+Line 38-46
+
+SEBELUM:
+<body
+    class="bg-bg dark:bg-dark-bg text-text dark:text-dark-text"
+    data-theme="{{ session('theme','light') }}"
+    data-book-id="{{ $book->id }}"
+    data-total-seconds="{{ $history->total_time_spent ?? 0 }}"
+    data-total-pages="{{ $book->total_pages ?? 0 }}"
+    data-last-page="{{ $history->last_page ?? 1 }}"
+>
+
+SESUDAH:
+<body
+    class="bg-bg dark:bg-dark-bg text-text dark:text-dark-text"
+    data-theme="{{ session('theme','light') }}"
+    data-book-id="{{ $book->id }}"
+    data-total-seconds="{{ $history->total_time_spent ?? 0 }}"
+    data-last-ping-at="{{ $history->last_ping_at ? $history->last_ping_at->getTimestamp() : null }}"
+    data-total-pages="{{ $book->total_pages ?? 0 }}"
+    data-last-page="{{ $history->last_page ?? 1 }}"
+>
+
+✅ Status: DONE
+
+─────────────────────────────────────────────────────────────────────────────
+✅ FIX #5: JavaScript - gunakan server timestamp
+─────────────────────────────────────────────────────────────────────────────
+Line 116-164
+
+SEBELUM:
+let serverTotalSeconds = parseInt(document.body.dataset.totalSeconds) || 0
+let lastPingTime = Date.now()                     ← BUG!
+
+function formatTime(sec) {...}
+
+function updateTimer() {
+    const elapsed = Math.floor((Date.now() - lastPingTime) / 1000)  ← BUG!
+    const currentTotal = serverTotalSeconds + elapsed
+    document.getElementById('readingTimer').textContent = formatTime(currentTotal)
+}
+
+async function sendPing() {
+    try {
+        ...
+        if (data.success) {
+            serverTotalSeconds = data.total_time_spent
+            lastPingTime = Date.now()             ← BUG!
+            updateTimer()
+            ...
+        }
+    } catch (error) {
+        ...
+    }
+}
+
+setInterval(updateTimer, 1000)
+updateTimer()
+setInterval(sendPing, 15000)
+
+SESUDAH:
+let serverTotalSeconds = parseInt(document.body.dataset.totalSeconds) || 0
+// PENTING: Gunakan last_ping_at dari server, BUKAN Date.now()!
+let lastPingTimestamp = parseInt(document.body.dataset.lastPingAt) || Math.floor(Date.now() / 1000)  ← FIXED!
+
+function formatTime(sec) {...}
+
+function updateTimer() {
+    // Hitung waktu yang sudah berlalu sejak server last_ping_at
+    const nowTimestamp = Math.floor(Date.now() / 1000)
+    const elapsedSinceLastPing = nowTimestamp - lastPingTimestamp  ← FIXED!
+    const currentTotal = serverTotalSeconds + elapsedSinceLastPing
+    document.getElementById('readingTimer').textContent = formatTime(currentTotal)
+}
+
+async function sendPing() {
+    try {
+        ...
+        if (data.success) {
+            // Update nilai dari server (source of truth)
+            serverTotalSeconds = data.total_time_spent
+            // Update timestamp ke SEKARANG, bukan dari server
+            lastPingTimestamp = Math.floor(Date.now() / 1000)  ← FIXED!
+            updateTimer()
+            console.log('✓ Ping sent! Delta:', data.delta + 's, Total:', serverTotalSeconds + 's')
+        }
+    } catch (error) {
+        console.error('✗ Error sending ping:', error)
+    }
+}
+
+// Update timer display setiap detik (visual only, bukan data persistence)
+setInterval(updateTimer, 1000)
+updateTimer()
+
+// Send ping setiap 15 detik (server-side accumulation)
+setInterval(sendPing, 15000)
+
+✅ Status: DONE
+
+═══════════════════════════════════════════════════════════════════════════════
+
+SUMMARY PERUBAHAN:
+═════════════════════════════════════════════════════════════════════════════════
+
+Total Fixes: 5
+Total Files: 2
+
+[✅] app/Http/Controllers/Frontend/BookController.php - 3 Fixes
+     ├─ FIX #1: read() - hapus update last_ping_at
+     ├─ FIX #2: startReading() - gunakan firstOrCreate
+     └─ FIX #3: ping() - hitung semua delta
+
+[✅] resources/views/frontend/reader.blade.php - 2 Fixes
+     ├─ FIX #4: body tag - tambah data-last-ping-at
+     └─ FIX #5: JavaScript - gunakan server timestamp
+
+═══════════════════════════════════════════════════════════════════════════════
+
+TESTING CHECKLIST:
+═════════════════════════════════════════════════════════════════════════════════
+
+[ ] Test #1: Reload page dalam 5 detik
+    Status: ___________
+    Expected: Timer continue, b

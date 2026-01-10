@@ -163,7 +163,9 @@ setInterval(updateTimer, 1000)
 updateTimer()
 
 // Send ping setiap 15 detik (server-side accumulation)
-setInterval(sendPing, 15000)
+// PENTING: Jangan tunda ping pertama, kirim langsung saat page load!
+sendPing()  // ← FIX: Ping pertama saat page load
+setInterval(sendPing, 15000)  // Ping berikutnya setiap 15 detik
 
 const bookId = document.body.dataset.bookId
 let currentPage = parseInt(document.body.dataset.lastPage) || 1
