@@ -3,7 +3,7 @@
 @section('title', 'Login')
 
 @section('content')
-<div class="min-h-screen flex items-center justify-center bg-bg dark:bg-dark-bg transition-colors duration-200">
+<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:bg-gradient-to-br dark:from-slate-950 dark:via-gray-950 dark:to-slate-950 transition-colors duration-200">
     <div class="login-card max-w-md w-full space-y-8 p-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 transition-all duration-200">
         <div class="text-center">
             <h1 class="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent">Perpustakaan Digital</h1>
