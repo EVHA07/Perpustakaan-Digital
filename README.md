@@ -103,17 +103,6 @@ npm run build
 php artisan serve
 ```
 
-### Default Credentials
-```
-Admin:
-Email: admin@example.com
-Password: password
-
-Student:
-Email: student@example.com
-Password: password
-```
-
 ## Tech Stack
 
 ### Backend
