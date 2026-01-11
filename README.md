@@ -103,6 +103,30 @@ npm run build
 php artisan serve
 ```
 
+### Membuat Akun Admin
+
+Setelah menjalankan migrasi, buat akun admin menggunakan tinker:
+
+```bash
+php artisan tinker
+```
+
+Lalu jalankan perintah berikut di tinker:
+
+```php
+use App\Models\User;
+
+User::create([
+    'name' => 'Nama Admin',
+    'email' => 'admin@perpustakaan.com',
+    'password' => bcrypt('password_aman'),
+    'role' => 'admin',
+    'is_active' => true,
+]);
+```
+
+Ganti email dan password sesuai kebutuhan Anda. Keluar dari tinker dengan mengetik `exit`.
+
 ## Tech Stack
 
 ### Backend
