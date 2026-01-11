@@ -92,93 +92,65 @@ php artisan key:generate
 # Run migrations
 php artisan migrate
 
+# Create storage link for file uploads
+php artisan storage:link
+
+# Run seeders (optional)
+php artisan db:seed
+
 # Build assets
 npm run build
 
 # Start development server
 php artisan serve
+```
 
-Create Admin Account
-After running the migrations, create an admin account using Tinker:
+### Membuat Akun Admin
+
+Setelah menjalankan migrasi, buat akun admin menggunakan tinker:
+
+```bash
 php artisan tinker
+```
 
-Then run the following command inside Tinker:
+Lalu jalankan perintah berikut di tinker:
+
+```php
 use App\Models\User;
 
 User::create([
-    'name' => 'Admin Name',
-    'email' => 'admin@library.com',
-    'password' => bcrypt('secure_password'),
+    'name' => 'Nama Admin',
+    'email' => 'admin@perpustakaan.com',
+    'password' => bcrypt('password_aman'),
     'role' => 'admin',
     'is_active' => true,
 ]);
+```
 
 Ganti email dan password sesuai kebutuhan Anda. Keluar dari tinker dengan mengetik `exit`.
 
-## Konfigurasi Upload File Besar
+### Custom Seeders (Opsional)
 
-Untuk mengupload file buku PDF yang lebih besar, perlu mengubah beberapa pengaturan di file `php.ini`:
+Jika Anda ingin menggunakan seeders untuk data awal:
 
-### Cara Mencari Lokasi php.ini
+1. Buat seeder baru:
 ```bash
-php --ini
-```
-Perintah di atas akan menampilkan lokasi file php.ini yang sedang digunakan.
-
-### Pengaturan yang Perlu Diubah
-
-Buka file `php.ini` dan ubah nilai berikut:
-
-```ini
-upload_max_filesize = 100M
-post_max_size = 100M
-max_execution_time = 300
-memory_limit = 512M
+php artisan make:seeder AdminSeeder
 ```
 
-**Penjelasan:**
-- `upload_max_filesize` - Ukuran maksimum file yang bisa diupload (contoh: 100M = 100MB)
-- `post_max_size` - Ukuran maksimum data POST yang bisa diterima (harus >= upload_max_filesize)
-- `max_execution_time` - Waktu maksimum eksekusi script dalam detik (untuk upload file besar)
-- `memory_limit` - Memori maksimum yang bisa digunakan PHP
+2. Edit file seeder di `database/seeders/AdminSeeder.php`
 
-### Setelah Mengubah php.ini
-
-**Windows:**
-```bash
-# Restart Apache/XAMPP
-# atau
-php-fpm.exe restart
-```
-
-**Linux/Mac:**
-```bash
-sudo systemctl restart php-fpm
-# atau
-sudo service apache2 restart
-```
-
-### Verifikasi Perubahan
-
-Cek apakah perubahan sudah berhasil:
-
-```bash
-php -i | grep upload_max_filesize
-php -i | grep post_max_size
-```
-
-### Menambahkan Validasi di Laravel
-
-Tambahkan di `app/Http/Requests/StoreBookRequest.php`:
-
+3. Tambahkan seeder ke `database/seeders/DatabaseSeeder.php`:
 ```php
-public function rules()
-{
-    return [
-        'pdf_file' => 'required|mimes:pdf|max:102400', // 100MB
-        // other rules...
-    ];
-}
+$this->call([
+    AdminSeeder::class,
+    // Tambah seeder lain di sini
+]);
+```
+
+4. Jalankan seeder:
+```bash
+php artisan db:seed
 ```
 
 ## Tech Stack
