@@ -169,5 +169,4 @@ Run tests
 php artisan test
 
 License
-This project is open-sourced software licensed under the MIT license.
-Would you like me to help you create a specific Contribution Guide or a Troubleshooting section for this project?
+This project is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
