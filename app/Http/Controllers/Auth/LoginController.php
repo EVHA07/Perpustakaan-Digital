@@ -23,6 +23,9 @@ class LoginController extends Controller
         if (Auth::attempt($credentials)) {
             $request->session()->regenerate();
 
+            // Set default theme to light
+            $request->session()->put('theme', 'light');
+
             if (Auth::user()->role === 'admin') {
                 return redirect()->route('admin.dashboard');
             }

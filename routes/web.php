@@ -48,9 +48,10 @@ Route::middleware(['auth', 'is.student'])->group(function () {
     Route::get('/history', [HistoryController::class, 'index'])->name('history');
     Route::get('/buku/{id}', [FrontendBookController::class, 'show'])->name('book.show');
     Route::get('/buku/{id}/read', [FrontendBookController::class, 'read'])->name('book.read');
-    Route::post('/buku/{id}/start', [FrontendBookController::class, 'startReading'])->name('book.start');
     Route::post('/buku/{id}/progress', [FrontendBookController::class, 'updateReadingProgress'])->name('book.progress');
-    Route::post('/buku/{id}/ping', [FrontendBookController::class, 'ping'])->name('book.ping');
+    Route::post('/buku/{id}/reading/start', [FrontendBookController::class, 'startReadingSession'])->name('book.reading.start');
+    Route::post('/buku/{id}/reading/sync', [FrontendBookController::class, 'syncReadingTime'])->name('book.reading.sync');
+    Route::post('/buku/{id}/reading/end', [FrontendBookController::class, 'endReadingSession'])->name('book.reading.end');
 });
 
 Route::get('/test-upload', function () {

@@ -7,6 +7,11 @@
     <title>Membaca — {{ $book->judul }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+    </script>
     <style>
         #pdfContainer {
             height: calc(100vh - 64px);
@@ -22,13 +27,6 @@
             margin: 0 auto;
             width: 100%;
         }
-        .page-nav {
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-        .page-nav:hover, .page-nav.visible {
-            opacity: 1;
-        }
         html, body {
             overflow: hidden;
         }
@@ -39,9 +37,6 @@
     class="bg-bg dark:bg-dark-bg text-text dark:text-dark-text"
     data-theme="{{ session('theme','light') }}"
     data-book-id="{{ $book->id }}"
-    data-total-seconds="{{ $history->total_time_spent ?? 0 }}"
-    data-last-ping-at="{{ $history->last_ping_at ? $history->last_ping_at->getTimestamp() : null }}"
-    data-total-pages="{{ $book->total_pages ?? 0 }}"
     data-last-page="{{ $history->last_page ?? 1 }}"
 >
 
@@ -75,18 +70,6 @@
 <main class="fixed inset-0 pt-16 bg-surface-secondary dark:bg-dark-bg">
     <div id="pdfContainer" class="relative"></div>
 
-    <button onclick="prevPage()" class="page-nav absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full backdrop-blur-md bg-surface/90 dark:bg-dark-surface/90 border border-border dark:border-dark-border shadow-lg">
-        <svg class="w-6 h-6 text-text dark:text-dark-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-        </svg>
-    </button>
-
-    <button onclick="nextPage()" class="page-nav absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full backdrop-blur-md bg-surface/90 dark:bg-dark-surface/90 border border-border dark:border-dark-border shadow-lg">
-        <svg class="w-6 h-6 text-text dark:text-dark-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-        </svg>
-    </button>
-
     <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full backdrop-blur-md bg-surface/90 dark:bg-dark-surface/90 border border-border dark:border-dark-border text-sm font-semibold shadow-lg">
         Hal <span id="currentPage">{{ $history->last_page ?? 1 }}</span> / <span id="totalPages">{{ $book->total_pages ?? '?' }}</span>
     </div>
@@ -98,6 +81,17 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 const html = document.documentElement
 const savedTheme = document.body.dataset.theme
 if (savedTheme === 'dark') html.classList.add('dark')
+
+const bookId = document.body.dataset.bookId
+let currentPage = parseInt(document.body.dataset.lastPage) || 1
+const pdfUrl = "{{ asset('storage/' . $book->file_path) }}"
+
+let sessionId = null
+let sessionStartTime = null
+let lastSyncTime = null
+let syncInterval = null
+let uiTimerInterval = null
+let isSyncing = false
 
 function toggleTheme() {
     html.classList.toggle('dark')
@@ -113,11 +107,6 @@ function toggleTheme() {
     })
 }
 
-let serverTotalSeconds = parseInt(document.body.dataset.totalSeconds) || 0
-// PENTING: Gunakan last_ping_at dari server, BUKAN Date.now()!
-// Ini mencegah reset saat page refresh
-let lastPingTimestamp = parseInt(document.body.dataset.lastPingAt) || Math.floor(Date.now() / 1000)
-
 function formatTime(sec) {
     const h = Math.floor(sec / 3600)
     const m = Math.floor((sec % 3600) / 60)
@@ -125,17 +114,18 @@ function formatTime(sec) {
     return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
 }
 
-function updateTimer() {
-    // Hitung waktu yang sudah berlalu sejak server last_ping_at
-    const nowTimestamp = Math.floor(Date.now() / 1000)
-    const elapsedSinceLastPing = nowTimestamp - lastPingTimestamp
-    const currentTotal = serverTotalSeconds + elapsedSinceLastPing
-    document.getElementById('readingTimer').textContent = formatTime(currentTotal)
+function updateUITimer() {
+    if (sessionStartTime) {
+        const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000)
+        document.getElementById('readingTimer').textContent = formatTime(elapsed)
+    } else {
+        document.getElementById('readingTimer').textContent = '00:00:00'
+    }
 }
 
-async function sendPing() {
+async function startReadingSession() {
     try {
-        const response = await fetch(`/buku/${bookId}/ping`, {
+        const response = await fetch(`/buku/${bookId}/reading/start`, {
             method: 'POST',
             headers: {
                 'Content-Type':'application/json',
@@ -146,32 +136,92 @@ async function sendPing() {
         const data = await response.json()
 
         if (data.success) {
-            // Update nilai dari server (source of truth)
-            serverTotalSeconds = data.total_time_spent
-            // Update timestamp ke SEKARANG, bukan dari server
-            lastPingTimestamp = Math.floor(Date.now() / 1000)
-            updateTimer()
-            console.log('✓ Ping sent! Delta:', data.delta + 's, Total:', serverTotalSeconds + 's')
+            sessionId = data.session_id
+            sessionStartTime = Date.now()
+            lastSyncTime = Date.now()
+            console.log('✓ Session started:', sessionId)
+
+            syncInterval = setInterval(syncReadingTime, 15000)
+            uiTimerInterval = setInterval(updateUITimer, 1000)
+            updateUITimer()
+        } else {
+            console.error('Failed to start session:', data.error)
         }
     } catch (error) {
-        console.error('✗ Error sending ping:', error)
+        console.error('Error starting reading session:', error)
     }
 }
 
-// Update timer display setiap detik (visual only, bukan data persistence)
-setInterval(updateTimer, 1000)
-updateTimer()
+async function syncReadingTime() {
+    if (!sessionId || !lastSyncTime || isSyncing) return
 
-// Send ping setiap 15 detik (server-side accumulation)
-// PENTING: Jangan tunda ping pertama, kirim langsung saat page load!
-sendPing()  // ← FIX: Ping pertama saat page load
-setInterval(sendPing, 15000)  // Ping berikutnya setiap 15 detik
+    isSyncing = true
+    const deltaSeconds = Math.floor((Date.now() - lastSyncTime) / 1000)
 
-const bookId = document.body.dataset.bookId
-let currentPage = parseInt(document.body.dataset.lastPage) || 1
-const totalPages = parseInt(document.body.dataset.totalPages) || 0
+    if (deltaSeconds <= 0) {
+        isSyncing = false
+        return
+    }
 
- const pdfUrl = "{{ asset('storage/'.$book->file_path) }}"
+    try {
+        const response = await fetch(`/buku/${bookId}/reading/sync`, {
+            method: 'POST',
+            headers: {
+                'Content-Type':'application/json',
+                'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({
+                session_id: sessionId,
+                delta_seconds: deltaSeconds
+            })
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+            lastSyncTime = Date.now()
+            console.log('✓ Synced:', deltaSeconds + 's, Total:', data.total_seconds + 's')
+        } else {
+            console.error('Sync failed:', data.error)
+        }
+    } catch (error) {
+        console.error('Error syncing reading time:', error)
+    } finally {
+        isSyncing = false
+    }
+}
+
+async function endReadingSession() {
+    if (!sessionId || !lastSyncTime) return
+
+    clearInterval(syncInterval)
+    clearInterval(uiTimerInterval)
+
+    const deltaSeconds = Math.floor((Date.now() - lastSyncTime) / 1000)
+
+    try {
+        await fetch(`/buku/${bookId}/reading/end`, {
+            method: 'POST',
+            headers: {
+                'Content-Type':'application/json',
+                'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({
+                session_id: sessionId,
+                delta_seconds: deltaSeconds
+            })
+        })
+
+        console.log('✓ Session ended, synced:', deltaSeconds + 's')
+    } catch (error) {
+        console.error('Error ending reading session:', error)
+    }
+
+    sessionId = null
+    sessionStartTime = null
+    lastSyncTime = null
+}
+
 let pdfDoc = null
 let isRendering = false
 let isSaving = false
@@ -233,58 +283,6 @@ async function loadPDF() {
     }
 }
 
-async function renderPage(pageNum) {
-    if (!pdfDoc) return
-
-    const page = await pdfDoc.getPage(pageNum)
-    const container = document.getElementById('pdfContainer')
-    const containerWidth = container.clientWidth
-
-    const viewport = page.getViewport({ scale: 1 })
-    const scale = containerWidth / viewport.width
-    const outputScale = window.devicePixelRatio || 1
-
-    const scaledViewport = page.getViewport({
-        scale: scale * outputScale
-    })
-
-    canvas.width = scaledViewport.width
-    canvas.height = scaledViewport.height
-    canvas.style.width = `${scaledViewport.width / outputScale}px`
-    canvas.style.height = `${scaledViewport.height / outputScale}px`
-
-    const renderContext = {
-        canvasContext: ctx,
-        viewport: scaledViewport
-    }
-
-    await page.render(renderContext).promise
-
-    document.getElementById('currentPage').textContent = pageNum
-    canvas.style.marginTop = '0'
-    canvas.style.marginBottom = '0'
-}
-
-function nextPage() {
-    if (pdfDoc && currentPage < pdfDoc.numPages) {
-        currentPage++
-        const pageElement = document.querySelector(`[data-page-num="${currentPage}"]`)
-        if (pageElement) {
-            pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }
-    }
-}
-
-function prevPage() {
-    if (currentPage > 1) {
-        currentPage--
-        const pageElement = document.querySelector(`[data-page-num="${currentPage}"]`)
-        if (pageElement) {
-            pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }
-    }
-}
-
 async function saveProgress() {
     if (isSaving) return
 
@@ -343,25 +341,17 @@ async function saveProgress() {
 
 async function exitReader() {
     console.log('Exiting reader...')
+    await endReadingSession()
     await saveProgress()
-    await sendPing()
-    console.log('Progress saved, redirecting...')
+    console.log('Redirecting...')
     window.location.href = `/buku/${bookId}`
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     loadPDF()
+    startReadingSession()
 
-    const navButtons = document.querySelectorAll('.page-nav')
     const pdfContainer = document.getElementById('pdfContainer')
-
-    pdfContainer.addEventListener('mouseenter', () => {
-        navButtons.forEach(btn => btn.classList.add('visible'))
-    })
-
-    pdfContainer.addEventListener('mouseleave', () => {
-        navButtons.forEach(btn => btn.classList.remove('visible'))
-    })
 
     pdfContainer.addEventListener('scroll', () => {
         const containerRect = pdfContainer.getBoundingClientRect()
@@ -393,8 +383,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') exitReader()
-        if (e.key === 'ArrowRight') nextPage()
-        if (e.key === 'ArrowLeft') prevPage()
         if (e.key === 'ArrowDown') {
             pdfContainer.scrollBy({ top: 200, behavior: 'smooth' })
         }
@@ -405,8 +393,16 @@ document.addEventListener('DOMContentLoaded', () => {
 })
 
 window.addEventListener('beforeunload', () => {
+    endReadingSession()
     saveProgress()
-    sendPing()
+})
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        endReadingSession()
+    } else {
+        startReadingSession()
+    }
 })
 
 window.addEventListener('resize', () => {

@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Book;
-use App\Models\History;
+use App\Models\UserBookStats;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
@@ -14,23 +14,6 @@ class DashboardController extends Controller
     {
         $totalStudents = User::where('role', 'student')->count();
         $totalBooks = Book::count();
-        $totalHistories = History::count();
-        $totalReadingTime = History::sum('total_time_spent');
-
-        $days = floor($totalReadingTime / 86400);
-        $hours = floor(($totalReadingTime % 86400) / 3600);
-        $minutes = floor(($totalReadingTime % 3600) / 60);
-        $seconds = $totalReadingTime % 60;
-
-        if ($days > 0) {
-            $totalReadingTimeFormatted = "{$days} hari {$hours} jam";
-        } elseif ($hours > 0) {
-            $totalReadingTimeFormatted = "{$hours} jam {$minutes} menit";
-        } elseif ($minutes > 0) {
-            $totalReadingTimeFormatted = "{$minutes} menit {$seconds} detik";
-        } else {
-            $totalReadingTimeFormatted = "{$seconds} detik";
-        }
 
         $recentStudents = User::where('role', 'student')
             ->orderBy('created_at', 'desc')
@@ -38,8 +21,8 @@ class DashboardController extends Controller
             ->get();
 
         foreach ($recentStudents as $student) {
-            $totalTime = History::where('user_id', $student->id)->sum('total_time_spent');
-            $totalBooks = History::where('user_id', $student->id)->distinct('book_id')->count('book_id');
+            $totalTime = UserBookStats::where('user_id', $student->id)->sum('total_seconds');
+            $totalBooks = UserBookStats::where('user_id', $student->id)->where('total_seconds', '>', 0)->count();
 
             $days = floor($totalTime / 86400);
             $hours = floor(($totalTime % 86400) / 3600);
@@ -66,8 +49,6 @@ class DashboardController extends Controller
         return view('admin.dashboard', compact(
             'totalStudents',
             'totalBooks',
-            'totalHistories',
-            'totalReadingTimeFormatted',
             'recentStudents',
             'recentBooks'
         ));

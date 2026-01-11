@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Frontend;
 use App\Http\Controllers\Controller;
 use App\Models\Book;
 use App\Models\History;
+use App\Models\UserBookStats;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -12,8 +13,6 @@ class HomeController extends Controller
 {
     public function index()
     {
-        $user = Auth::user();
-
         $continueReading = History::with('book')
             ->where('user_id', Auth::id())
             ->orderBy('last_read_at', 'desc')
@@ -25,9 +24,8 @@ class HomeController extends Controller
             ->limit(8)
             ->get();
 
-        // Calculate reading stats from histories (server-side truth)
-        $totalTimeSpent = History::where('user_id', Auth::id())->sum('total_time_spent');
-        $totalBooksRead = History::where('user_id', Auth::id())->distinct('book_id')->count('book_id');
+        $totalTimeSpent = UserBookStats::where('user_id', Auth::id())->sum('total_seconds');
+        $totalBooksRead = UserBookStats::where('user_id', Auth::id())->where('total_seconds', '>', 0)->count();
 
         $days = floor($totalTimeSpent / 86400);
         $hours = floor(($totalTimeSpent % 86400) / 3600);

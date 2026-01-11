@@ -25,51 +25,25 @@ class BookController extends Controller
     private function getPdfPageCount($filePath)
     {
         try {
-            // Method 1: Use pdftotext if available
-            $whichPdftotext = shell_exec('which pdftotext 2>/dev/null');
-            if (!empty(trim($whichPdftotext)) || file_exists('/mingw64/bin/pdftotext')) {
-                $output = shell_exec('pdftotext -layout "' . escapeshellarg($filePath) . '" - 2>/dev/null');
-                if ($output !== null && $output !== false) {
-                    // Count form feeds (page breaks)
-                    $pageCount = substr_count($output, "\f");
-                    if ($pageCount > 0) {
-                        return $pageCount;
-                    }
-                    // If no form feeds, try counting by line estimate
-                    $lines = substr_count($output, "\n");
-                    $estimatedPages = ceil($lines / 50);
-                    if ($estimatedPages > 0) {
-                        return $estimatedPages;
-                    }
-                }
+            if (!file_exists($filePath)) {
+                return 0;
             }
 
-            // Method 2: Count using grep for page numbers
-            $output = shell_exec('pdftotext "' . escapeshellarg($filePath) . '" - 2>/dev/null | wc -l');
-            if ($output) {
-                $lines = intval(trim($output));
-                // Estimate pages based on lines (roughly 45-55 lines per page)
-                $estimatedPages = ceil($lines / 50);
-                if ($estimatedPages > 0) {
-                    return $estimatedPages;
-                }
-            }
-
-            // Method 3: Use file size heuristic (fallback)
             $size = filesize($filePath);
             if ($size > 0) {
-                // Rough estimate: 50KB per page on average
+                // Heuristic: ~50KB per page on average for text-based PDFs
+                // Cap at reasonable limits
                 $estimatedPages = ceil($size / 50000);
-                return max(1, min($estimatedPages, 1000)); // Cap at 1000 pages
+                return max(1, min($estimatedPages, 1000));
             }
 
-            return 0;
+            return 1;
         } catch (\Exception $e) {
             Log::error('PDF page count failed', [
                 'error' => $e->getMessage(),
                 'file' => $filePath,
             ]);
-            return 0;
+            return 1;
         }
     }
 
@@ -103,7 +77,7 @@ class BookController extends Controller
                 'cover_image' => 'required|image|mimes:jpeg,png,jpg|max:10240',
                 'book_file' => 'required|file|max:51200',
                 'total_pages' => 'nullable|integer|min:0',
-                'is_active' => 'nullable|accepted',
+                'is_active' => 'nullable',
             ], [
                 'judul.required' => 'Judul harus diisi',
                 'kategori.required' => 'Kategori harus diisi',
@@ -117,56 +91,23 @@ class BookController extends Controller
                 'book_file.max' => 'Ukuran file buku maksimal 50MB',
                 'total_pages.integer' => 'Total halaman harus berupa angka',
                 'total_pages.min' => 'Total halaman tidak boleh negatif',
-                'is_active.accepted' => 'Status tidak valid',
             ]);
-
-            Log::info('Book upload - Validation passed');
 
             $coverFile = $request->file('cover_image');
             $bookFile = $request->file('book_file');
 
-            Log::info('Book upload - File info', [
-                'cover_original_name' => $coverFile ? $coverFile->getClientOriginalName() : 'null',
-                'cover_size' => $coverFile ? $coverFile->getSize() : 0,
-                'book_original_name' => $bookFile ? $bookFile->getClientOriginalName() : 'null',
-                'book_size' => $bookFile ? $bookFile->getSize() : 0,
-                'storage_root' => storage_path('app/public'),
-                'storage_exists' => is_dir(storage_path('app/public')),
-                'storage_writable' => is_writable(storage_path('app/public')),
-            ]);
-
             $coverPath = $coverFile->store('books/covers', 'public');
-
-            Log::info('Book upload - Cover uploaded', [
-                'cover_path' => $coverPath,
-                'cover_full_path' => storage_path('app/public/' . $coverPath),
-                'cover_exists' => file_exists(storage_path('app/public/' . $coverPath)),
-            ]);
-
-            $tempPath = $bookFile->store('books/temp', 'public');
-            $tempFilePath = storage_path('app/public/' . $tempPath);
-
-            // Auto-calculate total pages from PDF
-            $totalPages = $this->getPdfPageCount($tempFilePath);
-
-            Log::info('Book upload - PDF page count', [
-                'temp_path' => $tempPath,
-                'temp_file_exists' => file_exists($tempFilePath),
-                'total_pages' => $totalPages,
-            ]);
-
             $filePath = $bookFile->store('books/files', 'public');
 
-            // Delete temp file
-            if (file_exists($tempFilePath)) {
-                unlink($tempFilePath);
+            // Verify files were saved
+            if (!Storage::disk('public')->exists($coverPath)) {
+                throw new \Exception('Gagal menyimpan cover image');
+            }
+            if (!Storage::disk('public')->exists($filePath)) {
+                throw new \Exception('Gagal menyimpan file buku');
             }
 
-            Log::info('Book upload - Book file uploaded', [
-                'file_path' => $filePath,
-                'file_full_path' => storage_path('app/public/' . $filePath),
-                'file_exists' => file_exists(storage_path('app/public/' . $filePath)),
-            ]);
+            $totalPages = $this->getPdfPageCount(storage_path('app/public/' . $filePath));
 
             Book::create([
                 'judul' => $validated['judul'],
@@ -175,16 +116,14 @@ class BookController extends Controller
                 'cover_image' => $coverPath,
                 'file_path' => $filePath,
                 'total_pages' => $totalPages > 0 ? $totalPages : ($validated['total_pages'] ?? 0),
-                'is_active' => isset($validated['is_active']),
+                'is_active' => $request->has('is_active'),
             ]);
 
-            Log::info('Book upload - Success');
-
             return redirect()->route('admin.books.index')
-                ->with('success', 'Buku berhasil ditambahkan');
+                ->with('success', 'Buku "' . $validated['judul'] . '" berhasil ditambahkan');
 
         } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::error('Book upload - Validation failed', [
+            Log::warning('Book upload - Validation failed', [
                 'errors' => $e->errors(),
             ]);
             return back()
@@ -196,11 +135,10 @@ class BookController extends Controller
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
             ]);
             return back()
                 ->withInput()
-                ->with('error', 'Gagal menambahkan buku: ' . $e->getMessage());
+                ->with('error', 'Gagal menambahkan buku. Error: ' . $e->getMessage());
         }
     }
 
@@ -223,7 +161,7 @@ class BookController extends Controller
                 'cover_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
                 'book_file' => 'nullable|file|mimes:pdf,epub|max:10240',
                 'total_pages' => 'nullable|integer|min:0',
-                'is_active' => 'nullable|accepted',
+                'is_active' => 'nullable',
             ], [
                 'judul.required' => 'Judul harus diisi',
                 'kategori.required' => 'Kategori harus diisi',
@@ -236,14 +174,13 @@ class BookController extends Controller
                 'book_file.max' => 'Ukuran file buku maksimal 10MB',
                 'total_pages.integer' => 'Total halaman harus berupa angka',
                 'total_pages.min' => 'Total halaman tidak boleh negatif',
-                'is_active.accepted' => 'Status tidak valid',
             ]);
 
             $book->judul = $validated['judul'];
             $book->kategori = $validated['kategori'];
             $book->sinopsis = $validated['sinopsis'];
             $book->total_pages = $validated['total_pages'] ?? $book->total_pages;
-            $book->is_active = isset($validated['is_active']);
+            $book->is_active = $request->has('is_active');
 
             if ($request->hasFile('cover_image')) {
                 if ($book->cover_image) {

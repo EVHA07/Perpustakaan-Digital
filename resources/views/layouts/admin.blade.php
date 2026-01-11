@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" class="transition-colors duration-300">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -24,8 +24,18 @@
             transform: translateX(0);
         }
     </style>
+
+    {{-- INIT DARK MODE DARI SERVER --}}
+    <script>
+        (function () {
+            const theme = "{{ session('theme', 'light') }}";
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
 </head>
-<body class="text-text dark:text-dark-text transition-colors duration-200" data-theme="{{ session('theme', 'light') }}">
+<body class="text-text dark:text-dark-text bg-white dark:bg-slate-950 transition-colors duration-200" data-theme="{{ session('theme', 'light') }}">
     <!-- Flash Messages for Toast -->
     @if(session('success'))
         <div data-flash-success="{{ session('success') }}"></div>
@@ -59,9 +69,9 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                         </svg>
                     </button>
-                    <a href="{{ route('admin.users.index') }}" class="hidden sm:block text-text-muted hover:text-white transition-colors duration-300">Siswa</a>
-                    <a href="{{ route('admin.books.index') }}" class="hidden sm:block text-text-muted hover:text-white transition-colors duration-300">Buku</a>
-                    <span class="hidden sm:inline text-text-muted">{{ Auth::user()->name }}</span>
+                    <a href="{{ route('admin.users.index') }}" class="hidden sm:block text-gray-600 dark:text-gray-300 hover:text-white transition-colors duration-300">Siswa</a>
+                    <a href="{{ route('admin.books.index') }}" class="hidden sm:block text-gray-600 dark:text-gray-300 hover:text-white transition-colors duration-300">Buku</a>
+                    <span class="hidden sm:inline text-gray-600 dark:text-gray-300">{{ Auth::user()->name }}</span>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit" class="text-danger hover:text-red-400 transition-colors duration-300 p-2" title="Logout">
@@ -103,7 +113,7 @@
                 <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                 </svg>
-                <span class="text-text-muted">{{ Auth::user()->name }}</span>
+                <span class="text-gray-600 dark:text-gray-300">{{ Auth::user()->name }}</span>
             </div>
         </div>
         <div class="p-4 border-t border-border">
@@ -123,13 +133,17 @@
 
     <script src="{{ asset('js/toast.js') }}"></script>
     <script>
-        const currentTheme = document.body.dataset.theme;
-        if (currentTheme === 'dark') {
-            document.documentElement.classList.add('dark');
-            document.getElementById('theme-toggle-light').classList.remove('hidden');
+        // Initialize theme toggle icons based on current theme
+        const isDarkMode = document.documentElement.classList.contains('dark');
+        const lightIcon = document.getElementById('theme-toggle-light');
+        const darkIcon = document.getElementById('theme-toggle-dark');
+
+        if (isDarkMode) {
+            lightIcon.classList.remove('hidden');
+            darkIcon.classList.add('hidden');
         } else {
-            document.documentElement.classList.remove('dark');
-            document.getElementById('theme-toggle-dark').classList.remove('hidden');
+            lightIcon.classList.add('hidden');
+            darkIcon.classList.remove('hidden');
         }
 
         function toggleTheme() {

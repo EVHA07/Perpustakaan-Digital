@@ -31,13 +31,23 @@ class User extends Authenticatable
         return $this->hasMany(History::class);
     }
 
+    public function bookStats(): HasMany
+    {
+        return $this->hasMany(UserBookStats::class);
+    }
+
+    public function readingSessions(): HasMany
+    {
+        return $this->hasMany(ReadingSession::class);
+    }
+
     public function getTotalReadingTimeAttribute(): int
     {
-        return $this->histories()->sum('total_time_spent');
+        return (int) $this->bookStats()->sum('total_seconds');
     }
 
     public function getTotalBooksReadAttribute(): int
     {
-        return $this->histories()->distinct('book_id')->count('book_id');
+        return $this->bookStats()->where('total_seconds', '>', 0)->count();
     }
 }

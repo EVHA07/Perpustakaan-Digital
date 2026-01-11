@@ -42,8 +42,7 @@
                 @endif
 
                 <!-- Hidden form untuk submit -->
-                <form id="startReadingForm" method="POST" action="{{ route('book.start', $book->id) }}">
-                    @csrf
+                <form id="startReadingForm" method="GET" action="{{ route('book.read', $book->id) }}">
                 </form>
             </div>
         </div>
