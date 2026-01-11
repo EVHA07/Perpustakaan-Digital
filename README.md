@@ -1,83 +1,79 @@
-# Perpustakaan Digital
 
-Sistem perpustakaan digital berbasis web untuk mengelola buku, melacak waktu baca siswa, dan statistik pembelajaran.
+Digital Library
 
-## Fitur Utama
+A web-based digital library system for managing books, tracking student reading time, and monitoring learning statistics.
 
-### 👥 Role Management
-- **Admin**: Kelola user, buku, dan lihat dashboard statistik
-- **Student**: Akses buku, pelacakan waktu baca, dan riwayat pembelajaran
+Key Features
 
-### 📚 Manajemen Buku
-- Upload buku PDF
-- Auto-detect jumlah halaman
-- Kategori dan penulis
-- Status aktif/non-aktif
+👥 Role Management
+ * Admin: Manage users, books, and access the statistics dashboard.
+ * Student: Access books, track reading progress, and view learning history.
 
-### 📖 PDF Reader
-- Full-screen reader dengan scroll
-- Pelacakan halaman otomatis
-- Dark/Light mode
-- Navigasi keyboard
+📚 Book Management
+ * PDF book uploads.
+ * Auto-detect page counts.
+ * Category and author management.
+ * Active/Inactive status toggle.
 
-### ⏱️ Reading Timer (Architecture Baru)
+📖 PDF Reader
+ * Full-screen reader with scroll support.
+ * Automatic page tracking.
+ * Dark/Light mode.
+ * Keyboard navigation.
 
-**Design Principle**: Backend sebagai single source of truth, frontend hanya menghitung delta.
+⏱️ Reading Timer (New Architecture)
+Design Principle: Backend as the single source of truth; frontend only calculates the delta (time elapsed).
 
-#### Database Structure
-```sql
--- reading_sessions: Tracking sesi aktif (TIDAK menyimpan durasi)
+Database Structure
+-- reading_sessions: Tracks active sessions (DOES NOT store duration)
 - id
 - user_id, book_id
 - started_at
 - last_ping_at
 - created_at, updated_at
 
--- user_book_stats: Single source of truth untuk total waktu baca
+-- user_book_stats: Single source of truth for total reading time
 - id
 - user_id, book_id
 - total_seconds (UNSIGNED INTEGER)
 - created_at, updated_at
 -- UNIQUE: (user_id, book_id)
-```
 
-#### API Endpoints
-```
-POST /buku/{id}/reading/start
+API Endpoints
+POST /book/{id}/reading/start
 → Creates reading session, returns session_id
 
-POST /buku/{id}/reading/sync
+POST /book/{id}/reading/sync
 → Adds delta_seconds to user_book_stats.total_seconds
 → Updates last_ping_at
 
-POST /buku/{id}/reading/end
+POST /book/{id}/reading/end
 → Final sync before closing session
-```
 
-#### Frontend Flow
-1. On load: `startReadingSession()` → get `session_id`
-2. Start local stopwatch for UI only
-3. Every 15s: Send `{session_id, delta_seconds}` to backend
-4. Backend: `user_book_stats.total_seconds += delta_seconds`
-5. On exit/tab hidden: `endReadingSession()` → final delta sync
+Frontend Flow
+ * On load: startReadingSession() → get session_id.
+ * Start local stopwatch for UI display only.
+ * Every 15s: Send {session_id, delta_seconds} to backend.
+ * Backend: user_book_stats.total_seconds += delta_seconds.
+ * On exit/tab hidden: endReadingSession() → final delta sync.
+Installation
+Prerequisites
+ * PHP 8.1+
+ * Composer
+ * MySQL
+ * Node.js & NPM
+📌 Required php.ini Settings
+To ensure smooth PDF uploads (especially for large files), open your active php.ini file and verify the following values:
+file_uploads = On
 
-#### Key Features
-- ✅ Total time NEVER resets (only increments)
-- ✅ Safe against refresh, reload, network failure
-- ✅ No `duration_seconds` in sessions table
-- ✅ Frontend calculates delta only for UI
-- ✅ Backend is the ONLY source of truth
+upload_max_filesize = 50M
+post_max_size = 50M
 
-## Installation
+max_execution_time = 300
+max_input_time = 300
+memory_limit = 256M
 
-### Prerequisites
-- PHP 8.1+
-- Composer
-- MySQL
-- Node.js & NPM
-
-### Setup
-```bash
+Setup
 # Clone repository
 git clone https://github.com/EVHA07/Perpustakaan-Digital.git
 cd Perpustakaan-Digital
@@ -91,7 +87,7 @@ cp .env.example .env
 php artisan key:generate
 
 # Database configuration
-# Edit .env file with your database credentials
+# Edit the .env file with your database credentials
 
 # Run migrations
 php artisan migrate
@@ -101,48 +97,34 @@ npm run build
 
 # Start development server
 php artisan serve
-```
 
-### Membuat Akun Admin
-
-Setelah menjalankan migrasi, buat akun admin menggunakan tinker:
-
-```bash
+Create Admin Account
+After running the migrations, create an admin account using Tinker:
 php artisan tinker
-```
 
-Lalu jalankan perintah berikut di tinker:
-
-```php
+Then run the following command inside Tinker:
 use App\Models\User;
 
 User::create([
-    'name' => 'Nama Admin',
-    'email' => 'admin@perpustakaan.com',
-    'password' => bcrypt('password_aman'),
+    'name' => 'Admin Name',
+    'email' => 'admin@library.com',
+    'password' => bcrypt('secure_password'),
     'role' => 'admin',
     'is_active' => true,
 ]);
-```
 
-Ganti email dan password sesuai kebutuhan Anda. Keluar dari tinker dengan mengetik `exit`.
-
-## Tech Stack
-
-### Backend
-- **Laravel 11** - Framework
-- **MySQL** - Database
-- **Eloquent ORM** - Database queries
-
-### Frontend
-- **Vite** - Build tool
-- **Tailwind CSS** - Styling
-- **PDF.js** - PDF rendering
-- **Alpine.js** - Interactivity
-
-## Project Structure
-
-```
+Replace the email and password as needed. Type exit to leave Tinker.
+Tech Stack
+Backend
+ * Laravel 11 - Framework
+ * MySQL - Database
+ * Eloquent ORM - Database queries
+Frontend
+ * Vite - Build tool
+ * Tailwind CSS - Styling
+ * PDF.js - PDF rendering
+ * Alpine.js - Interactivity
+Project Structure
 app/
 ├── Http/Controllers/
 │   ├── Admin/
@@ -175,25 +157,17 @@ resources/
 │   ├── admin/
 │   ├── frontend/
 │   └── auth/
-```
 
-## Development
-
-### Run migrations
-```bash
+Development
+Run migrations
 php artisan migrate
-```
 
-### Build assets for production
-```bash
+Build assets for production
 npm run build
-```
 
-### Run tests
-```bash
+Run tests
 php artisan test
-```
 
-## License
-
-This project is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+License
+This project is open-sourced software licensed under the MIT license.
+Would you like me to help you create a specific Contribution Guide or a Troubleshooting section for this project?
