@@ -127,6 +127,72 @@ User::create([
 
 Ganti email dan password sesuai kebutuhan Anda. Keluar dari tinker dengan mengetik `exit`.
 
+## Konfigurasi Upload File Besar
+
+Untuk mengupload file buku PDF yang lebih besar, perlu mengubah beberapa pengaturan di file `php.ini`:
+
+### Cara Mencari Lokasi php.ini
+```bash
+php --ini
+```
+Perintah di atas akan menampilkan lokasi file php.ini yang sedang digunakan.
+
+### Pengaturan yang Perlu Diubah
+
+Buka file `php.ini` dan ubah nilai berikut:
+
+```ini
+upload_max_filesize = 100M
+post_max_size = 100M
+max_execution_time = 300
+memory_limit = 512M
+```
+
+**Penjelasan:**
+- `upload_max_filesize` - Ukuran maksimum file yang bisa diupload (contoh: 100M = 100MB)
+- `post_max_size` - Ukuran maksimum data POST yang bisa diterima (harus >= upload_max_filesize)
+- `max_execution_time` - Waktu maksimum eksekusi script dalam detik (untuk upload file besar)
+- `memory_limit` - Memori maksimum yang bisa digunakan PHP
+
+### Setelah Mengubah php.ini
+
+**Windows:**
+```bash
+# Restart Apache/XAMPP
+# atau
+php-fpm.exe restart
+```
+
+**Linux/Mac:**
+```bash
+sudo systemctl restart php-fpm
+# atau
+sudo service apache2 restart
+```
+
+### Verifikasi Perubahan
+
+Cek apakah perubahan sudah berhasil:
+
+```bash
+php -i | grep upload_max_filesize
+php -i | grep post_max_size
+```
+
+### Menambahkan Validasi di Laravel
+
+Tambahkan di `app/Http/Requests/StoreBookRequest.php`:
+
+```php
+public function rules()
+{
+    return [
+        'pdf_file' => 'required|mimes:pdf|max:102400', // 100MB
+        // other rules...
+    ];
+}
+```
+
 ## Tech Stack
 
 ### Backend
