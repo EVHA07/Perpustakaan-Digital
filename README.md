@@ -1,59 +1,186 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Perpustakaan Digital
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Sistem perpustakaan digital berbasis web untuk mengelola buku, melacak waktu baca siswa, dan statistik pembelajaran.
 
-## About Laravel
+## Fitur Utama
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+### 👥 Role Management
+- **Admin**: Kelola user, buku, dan lihat dashboard statistik
+- **Student**: Akses buku, pelacakan waktu baca, dan riwayat pembelajaran
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### 📚 Manajemen Buku
+- Upload buku PDF
+- Auto-detect jumlah halaman
+- Kategori dan penulis
+- Status aktif/non-aktif
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### 📖 PDF Reader
+- Full-screen reader dengan scroll
+- Pelacakan halaman otomatis
+- Dark/Light mode
+- Navigasi keyboard
 
-## Learning Laravel
+### ⏱️ Reading Timer (Architecture Baru)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+**Design Principle**: Backend sebagai single source of truth, frontend hanya menghitung delta.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+#### Database Structure
+```sql
+-- reading_sessions: Tracking sesi aktif (TIDAK menyimpan durasi)
+- id
+- user_id, book_id
+- started_at
+- last_ping_at
+- created_at, updated_at
 
-## Laravel Sponsors
+-- user_book_stats: Single source of truth untuk total waktu baca
+- id
+- user_id, book_id
+- total_seconds (UNSIGNED INTEGER)
+- created_at, updated_at
+-- UNIQUE: (user_id, book_id)
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+#### API Endpoints
+```
+POST /buku/{id}/reading/start
+→ Creates reading session, returns session_id
 
-### Premium Partners
+POST /buku/{id}/reading/sync
+→ Adds delta_seconds to user_book_stats.total_seconds
+→ Updates last_ping_at
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+POST /buku/{id}/reading/end
+→ Final sync before closing session
+```
 
-## Contributing
+#### Frontend Flow
+1. On load: `startReadingSession()` → get `session_id`
+2. Start local stopwatch for UI only
+3. Every 15s: Send `{session_id, delta_seconds}` to backend
+4. Backend: `user_book_stats.total_seconds += delta_seconds`
+5. On exit/tab hidden: `endReadingSession()` → final delta sync
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+#### Key Features
+- ✅ Total time NEVER resets (only increments)
+- ✅ Safe against refresh, reload, network failure
+- ✅ No `duration_seconds` in sessions table
+- ✅ Frontend calculates delta only for UI
+- ✅ Backend is the ONLY source of truth
 
-## Code of Conduct
+## Installation
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### Prerequisites
+- PHP 8.1+
+- Composer
+- MySQL
+- Node.js & NPM
 
-## Security Vulnerabilities
+### Setup
+```bash
+# Clone repository
+git clone https://github.com/EVHA07/Perpustakaan-Digital.git
+cd Perpustakaan-Digital
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+# Install dependencies
+composer install
+npm install
+
+# Environment setup
+cp .env.example .env
+php artisan key:generate
+
+# Database configuration
+# Edit .env file with your database credentials
+
+# Run migrations
+php artisan migrate
+
+# Build assets
+npm run build
+
+# Start development server
+php artisan serve
+```
+
+### Default Credentials
+```
+Admin:
+Email: admin@example.com
+Password: password
+
+Student:
+Email: student@example.com
+Password: password
+```
+
+## Tech Stack
+
+### Backend
+- **Laravel 11** - Framework
+- **MySQL** - Database
+- **Eloquent ORM** - Database queries
+
+### Frontend
+- **Vite** - Build tool
+- **Tailwind CSS** - Styling
+- **PDF.js** - PDF rendering
+- **Alpine.js** - Interactivity
+
+## Project Structure
+
+```
+app/
+├── Http/Controllers/
+│   ├── Admin/
+│   │   ├── DashboardController.php
+│   │   ├── BookController.php
+│   │   └── UserController.php
+│   └── Frontend/
+│       ├── HomeController.php
+│       ├── BookController.php
+│       ├── SearchController.php
+│       └── HistoryController.php
+├── Models/
+│   ├── User.php
+│   ├── Book.php
+│   ├── History.php
+│   ├── UserBookStats.php
+│   └── ReadingSession.php
+
+database/
+├── migrations/
+│   ├── 2024_01_01_000001_create_users_table.php
+│   ├── 2024_01_01_000002_create_books_table.php
+│   ├── 2026_01_11_000001_create_user_book_stats_table.php
+│   ├── 2026_01_11_000002_recreate_reading_sessions_table.php
+│   └── ...
+
+resources/
+├── views/
+│   ├── layouts/
+│   ├── admin/
+│   ├── frontend/
+│   └── auth/
+```
+
+## Development
+
+### Run migrations
+```bash
+php artisan migrate
+```
+
+### Build assets for production
+```bash
+npm run build
+```
+
+### Run tests
+```bash
+php artisan test
+```
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This project is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
